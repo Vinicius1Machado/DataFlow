@@ -21,6 +21,11 @@ class JobDownloadResponse(BaseModel):
     result_package_url: str
 
 
+class JobDeleteResponse(BaseModel):
+    job_id: uuid.UUID
+    message: str
+
+
 @router.get("/{job_id}/download", response_model=JobDownloadResponse)
 def get_job_download_url(
     job_id: uuid.UUID,
@@ -48,6 +53,22 @@ def get_job(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
 
     return data_job
+
+
+@router.delete("/{job_id}", response_model=JobDeleteResponse)
+def delete_job(
+    job_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+) -> JobDeleteResponse:
+    data_job = db.get(DataJob, job_id)
+    if data_job is None or data_job.user_id != current_user.username:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
+
+    db.delete(data_job)
+    db.commit()
+
+    return JobDeleteResponse(job_id=job_id, message="Job removed from history.")
 
 
 @router.get("", response_model=list[DataJobResponse])

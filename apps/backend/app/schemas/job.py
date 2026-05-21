@@ -7,7 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class DataJobCreate(BaseModel):
     user_id: str = Field(min_length=1, max_length=255)
+    job_name: str = Field(min_length=1, max_length=255)
     file_name: str = Field(min_length=1, max_length=255)
+    file_fingerprint: str = Field(min_length=64, max_length=64)
     file_type: str = Field(min_length=1, max_length=50)
     file_size: int = Field(ge=0)
     raw_file_url: str = Field(min_length=1)
@@ -16,7 +18,9 @@ class DataJobCreate(BaseModel):
 
 class DataJobResponse(BaseModel):
     id: uuid.UUID
+    job_name: str
     file_name: str
+    file_fingerprint: str
     file_type: str
     file_size: int
     status: str

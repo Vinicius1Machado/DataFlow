@@ -17,6 +17,7 @@ const PROCESSING_STATUSES = [
 ];
 
 type AuthMode = "login" | "register";
+type MainView = "processing" | "history";
 
 type UserResponse = {
   id: string;
@@ -53,7 +54,9 @@ type AnalysisJson = {
 
 type JobResponse = {
   id: string;
+  job_name: string;
   file_name: string;
+  file_fingerprint: string;
   file_type: string;
   file_size: number;
   status: string;
@@ -80,9 +83,11 @@ export default function Home() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<UserResponse | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [jobName, setJobName] = useState("");
   const [uploadResult, setUploadResult] = useState<UploadResponse | null>(null);
   const [jobStatus, setJobStatus] = useState<JobResponse | null>(null);
   const [jobs, setJobs] = useState<JobResponse[]>([]);
+  const [activeView, setActiveView] = useState<MainView>("processing");
   const [alert, setAlert] = useState<AlertState | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
@@ -91,8 +96,8 @@ export default function Home() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const canUpload = useMemo(
-    () => selectedFile !== null && !isUploading && accessToken !== null,
-    [selectedFile, isUploading, accessToken],
+    () => selectedFile !== null && jobName.trim().length > 0 && !isUploading && accessToken !== null,
+    [selectedFile, jobName, isUploading, accessToken],
   );
 
   useEffect(() => {
@@ -183,6 +188,7 @@ export default function Home() {
     setCurrentUser(null);
     setJobs([]);
     setSelectedFile(null);
+    setJobName("");
     setUploadResult(null);
     setJobStatus(null);
   }
@@ -205,13 +211,16 @@ export default function Home() {
     }
 
     setSelectedFile(file);
+    if (!jobName.trim()) {
+      setJobName(file.name.replace(/\.[^.]+$/, ""));
+    }
     setAlert({ type: "info", message: "Arquivo pronto para envio." });
   }
 
   async function handleUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedFile || !accessToken) {
-      setAlert({ type: "error", message: "Selecione um arquivo e faca login antes de enviar." });
+    if (!selectedFile || !accessToken || !jobName.trim()) {
+      setAlert({ type: "error", message: "Informe um nome para o processamento e selecione um arquivo." });
       return;
     }
 
@@ -222,6 +231,7 @@ export default function Home() {
 
     const formData = new FormData();
     formData.append("file", selectedFile);
+    formData.append("job_name", jobName.trim());
 
     try {
       const response = await apiFetch(
@@ -240,6 +250,9 @@ export default function Home() {
 
       setUploadResult(data);
       setAlert({ type: "success", message: data.message || "Arquivo enviado com sucesso." });
+      setActiveView("processing");
+      setJobName("");
+      setSelectedFile(null);
       await loadJobs(accessToken);
     } catch (error) {
       setAlert({ type: "error", message: getFriendlyError(error) });
@@ -275,6 +288,36 @@ export default function Home() {
     }
   }
 
+  async function handleDeleteJob(job: JobResponse) {
+    if (!accessToken) {
+      return;
+    }
+
+    const shouldDelete = window.confirm(`Excluir "${job.job_name}" do historico?`);
+    if (!shouldDelete) {
+      return;
+    }
+
+    try {
+      const response = await apiFetch(`/api/jobs/${job.id}`, { method: "DELETE" }, accessToken);
+      const data = await parseApiResponse<{ message?: string }>(response);
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(data, "Falha ao excluir registro."));
+      }
+
+      setJobs((currentJobs) => currentJobs.filter((item) => item.id !== job.id));
+      if (jobStatus?.id === job.id) {
+        setJobStatus(null);
+      }
+      if (uploadResult?.job_id === job.id) {
+        setUploadResult(null);
+      }
+      setAlert({ type: "success", message: data.message ?? "Registro removido do historico." });
+    } catch (error) {
+      setAlert({ type: "error", message: getFriendlyError(error) });
+    }
+  }
+
   if (isBootstrapping) {
     return (
       <main className="dataflow-bg grid min-h-screen place-items-center px-6">
@@ -288,7 +331,7 @@ export default function Home() {
   if (!currentUser || !accessToken) {
     return (
       <main className="dataflow-bg min-h-screen text-slate-100">
-        <section className="mx-auto grid min-h-screen w-full max-w-6xl items-center gap-8 px-6 py-10 lg:grid-cols-[1fr_420px]">
+        <section className="mx-auto grid min-h-screen w-full max-w-6xl items-center gap-8 px-6 py-10 lg:grid-cols-[1fr_420px] lg:items-center">
           <BrandIntro />
 
           <AuthPanel
@@ -311,7 +354,36 @@ export default function Home() {
     <main className="dataflow-bg min-h-screen text-slate-100">
       <section className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-5 py-6 sm:px-8 lg:px-10">
         <header className="mb-6 flex flex-col gap-4 border-b border-emerald-400/20 pb-5 lg:flex-row lg:items-center lg:justify-between">
-          <LogoLockup />
+          <div>
+            <LogoLockup />
+            <nav className="mt-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveView("processing")}
+                className={`h-10 rounded-md border px-4 text-sm font-semibold transition ${
+                  activeView === "processing"
+                    ? "border-emerald-400 bg-emerald-400 text-slate-950"
+                    : "border-slate-700 bg-slate-950/60 text-slate-300 hover:border-emerald-400/60 hover:text-emerald-200"
+                }`}
+              >
+                Processamento
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveView("history");
+                  loadJobs();
+                }}
+                className={`h-10 rounded-md border px-4 text-sm font-semibold transition ${
+                  activeView === "history"
+                    ? "border-emerald-400 bg-emerald-400 text-slate-950"
+                    : "border-slate-700 bg-slate-950/60 text-slate-300 hover:border-emerald-400/60 hover:text-emerald-200"
+                }`}
+              >
+                Historico
+              </button>
+            </nav>
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="rounded-md border border-slate-700/80 bg-slate-950/60 px-3 py-2 font-mono text-sm text-slate-300">
               user:<span className="ml-1 font-semibold text-emerald-300">{currentUser.username}</span>
@@ -326,25 +398,15 @@ export default function Home() {
           </div>
         </header>
 
-        <div className="grid gap-6 xl:grid-cols-[320px_1fr]">
-          <HistoryPanel
-            jobs={jobs}
-            activeJobId={jobStatus?.id ?? uploadResult?.job_id}
-            isLoading={isLoadingHistory}
-            onRefresh={() => loadJobs()}
-            onSelectJob={(job) => {
-              setJobStatus(job);
-              setUploadResult(null);
-              setAlert(null);
-            }}
-          />
-
+        {activeView === "processing" ? (
           <div className="grid gap-6">
             <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
               <UploadPanel
                 selectedFile={selectedFile}
+                jobName={jobName}
                 canUpload={canUpload}
                 isUploading={isUploading}
+                onJobNameChange={setJobName}
                 onFileChange={handleFileChange}
                 onUpload={handleUpload}
               />
@@ -361,7 +423,24 @@ export default function Home() {
 
             {jobStatus ? <JobResult job={jobStatus} /> : <EmptySelection />}
           </div>
-        </div>
+        ) : (
+          <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
+            <HistoryPanel
+              jobs={jobs}
+              activeJobId={jobStatus?.id ?? uploadResult?.job_id}
+              isLoading={isLoadingHistory}
+              onRefresh={() => loadJobs()}
+              onSelectJob={(job) => {
+                setJobStatus(job);
+                setUploadResult(null);
+                setAlert(null);
+              }}
+              onDeleteJob={handleDeleteJob}
+            />
+
+            {jobStatus ? <JobResult job={jobStatus} /> : <EmptyHistorySelection />}
+          </div>
+        )}
       </section>
     </main>
   );
@@ -381,11 +460,11 @@ function LogoMark({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
 
 function LogoLockup() {
   return (
-    <div className="flex items-center gap-3">
-      <LogoMark />
+    <div className="flex items-center gap-4">
+      <LogoMark size="lg" />
       <div>
-        <p className="font-mono text-sm font-semibold uppercase tracking-[0.28em] text-emerald-300">DataFlow</p>
-        <h1 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">Scripts Python para dados confiaveis</h1>
+        <p className="font-mono text-xs font-semibold uppercase tracking-[0.32em] text-emerald-300">Plataforma</p>
+        <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-50 sm:text-4xl">DataFlow</h1>
       </div>
     </div>
   );
@@ -448,9 +527,9 @@ function AuthPanel({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
-    <form onSubmit={onSubmit} className="dataflow-panel relative overflow-hidden rounded-2xl p-6">
+    <form onSubmit={onSubmit} className="dataflow-panel relative overflow-hidden rounded-2xl p-6 lg:self-center lg:translate-y-[27px]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/70 to-transparent" />
-      <div className="mb-6 flex items-center gap-3 border-b border-slate-800 pb-5">
+      <div className="mb-5 flex items-center gap-3 border-b border-slate-800 pb-4">
         <LogoMark size="sm" />
         <div>
           <p className="font-mono text-xs font-semibold uppercase tracking-[0.24em] text-emerald-300">Acesso DataFlow</p>
@@ -460,7 +539,7 @@ function AuthPanel({
         </div>
       </div>
 
-      <div className="mb-5 grid grid-cols-2 rounded-md border border-slate-700 bg-slate-950/70 p-1">
+      <div className="mb-4 grid grid-cols-2 rounded-md border border-slate-700 bg-slate-950/70 p-1">
         <button
           type="button"
           onClick={() => onModeChange("login")}
@@ -489,7 +568,7 @@ function AuthPanel({
         placeholder="ex: analista_dados"
       />
 
-      <label className="mt-4 block text-sm font-medium text-slate-200" htmlFor="password">
+      <label className="mt-3 block text-sm font-medium text-slate-200" htmlFor="password">
         Senha
       </label>
       <input
@@ -521,12 +600,14 @@ function HistoryPanel({
   isLoading,
   onRefresh,
   onSelectJob,
+  onDeleteJob,
 }: {
   jobs: JobResponse[];
   activeJobId?: string;
   isLoading: boolean;
   onRefresh: () => void;
   onSelectJob: (job: JobResponse) => void;
+  onDeleteJob: (job: JobResponse) => void;
 }) {
   return (
     <aside className="dataflow-panel rounded-lg p-4 xl:sticky xl:top-6 xl:max-h-[calc(100vh-48px)] xl:overflow-auto">
@@ -551,25 +632,35 @@ function HistoryPanel({
           </div>
         ) : (
           jobs.map((job) => (
-            <button
+            <div
               key={job.id}
-              type="button"
-              onClick={() => onSelectJob(job)}
               className={`w-full rounded-md border p-3 text-left transition ${
                 activeJobId === job.id
                   ? "border-emerald-400 bg-emerald-400/10"
                   : "border-slate-800 bg-slate-950/50 hover:border-slate-600 hover:bg-slate-900/70"
               }`}
             >
-              <div className="flex items-start justify-between gap-2">
-                <p className="line-clamp-2 text-sm font-semibold text-slate-100">{job.file_name}</p>
-                <StatusBadge status={job.status} />
+              <button type="button" onClick={() => onSelectJob(job)} className="w-full text-left">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="line-clamp-2 text-sm font-semibold text-slate-100">{job.job_name}</p>
+                  <StatusBadge status={job.status} />
+                </div>
+                <p className="mt-1 line-clamp-1 text-xs text-slate-500">{job.file_name}</p>
+                <p className="mt-2 font-mono text-xs text-slate-500">
+                  {job.file_type.toUpperCase()} | {formatBytes(job.file_size)}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">{formatDate(job.created_at)}</p>
+              </button>
+              <div className="mt-3 flex justify-end border-t border-slate-800 pt-2">
+                <button
+                  type="button"
+                  onClick={() => onDeleteJob(job)}
+                  className="rounded-md border border-red-400/30 px-2.5 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-950/50"
+                >
+                  Excluir
+                </button>
               </div>
-              <p className="mt-2 font-mono text-xs text-slate-500">
-                {job.file_type.toUpperCase()} | {formatBytes(job.file_size)}
-              </p>
-              <p className="mt-1 text-xs text-slate-600">{formatDate(job.created_at)}</p>
-            </button>
+            </div>
           ))
         )}
       </div>
@@ -579,14 +670,18 @@ function HistoryPanel({
 
 function UploadPanel({
   selectedFile,
+  jobName,
   canUpload,
   isUploading,
+  onJobNameChange,
   onFileChange,
   onUpload,
 }: {
   selectedFile: File | null;
+  jobName: string;
   canUpload: boolean;
   isUploading: boolean;
+  onJobNameChange: (value: string) => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onUpload: (event: FormEvent<HTMLFormElement>) => void;
 }) {
@@ -597,6 +692,21 @@ function UploadPanel({
           <h2 className="text-lg font-semibold text-slate-100">Novo processamento</h2>
           <p className="mt-1 text-sm text-slate-500">Envie CSV, Parquet, JSON ou XML ate 50 MB.</p>
         </div>
+      </div>
+
+      <div className="mt-5 rounded-lg border border-emerald-400/25 bg-emerald-400/[0.04] p-4">
+        <label className="text-sm font-semibold text-slate-100" htmlFor="job-name">
+          Nome do processamento
+        </label>
+        <input
+          id="job-name"
+          value={jobName}
+          onChange={(event) => onJobNameChange(event.target.value)}
+          className="mt-2 h-11 w-full rounded-md border border-slate-700 bg-slate-950/80 px-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-emerald-400"
+          maxLength={255}
+          placeholder="Ex: Limpeza de clientes - maio"
+        />
+        <p className="mt-2 text-xs text-slate-500">Esse nome sera usado como titulo do registro no historico.</p>
       </div>
 
       <div className="dataflow-terminal mt-5 flex min-h-44 flex-col items-center justify-center rounded-lg border-dashed px-4 py-8 text-center">
@@ -661,6 +771,7 @@ function JobPanel({
       <dl className="mt-5 grid gap-4 sm:grid-cols-2">
         <ResultRow label="Job ID" value={jobStatus?.id ?? uploadResult?.job_id ?? "-"} />
         <ResultRow label="Status" value={jobStatus?.status ?? uploadResult?.status ?? "-"} />
+        <ResultRow label="Registro" value={jobStatus?.job_name ?? "-"} />
         <ResultRow label="Arquivo" value={jobStatus?.file_name ?? selectedFileName ?? "-"} />
         <ResultRow label="Criado em" value={jobStatus ? formatDate(jobStatus.created_at) : "-"} />
       </dl>
@@ -838,7 +949,15 @@ function FailedState({ errorMessage }: { errorMessage?: string | null }) {
 function EmptySelection() {
   return (
     <div className="dataflow-panel-soft rounded-lg border-dashed p-6 text-sm text-slate-500">
-      Selecione um job no historico ou envie um novo arquivo para visualizar os resultados aqui.
+      Envie um novo arquivo para acompanhar o processamento e visualizar os resultados aqui.
+    </div>
+  );
+}
+
+function EmptyHistorySelection() {
+  return (
+    <div className="dataflow-panel-soft rounded-lg border-dashed p-6 text-sm text-slate-500">
+      Selecione um job no historico para visualizar os artefatos gerados.
     </div>
   );
 }
