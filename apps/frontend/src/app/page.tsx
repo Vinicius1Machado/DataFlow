@@ -409,12 +409,6 @@ function BrandIntro() {
         Organize uploads, acompanhe cada processamento e mantenha um historico seguro dos scripts gerados para seus arquivos CSV, Parquet, JSON e XML.
       </p>
 
-      <div className="mt-7 grid max-w-2xl gap-3 sm:grid-cols-3">
-        <FeaturePill label="Upload guiado" value="4 formatos" />
-        <FeaturePill label="Historico" value="por usuario" />
-        <FeaturePill label="Entrega" value="script + README" />
-      </div>
-
       <div className="dataflow-terminal mt-8 max-w-2xl rounded-lg p-4 font-mono text-sm text-slate-300">
         <div className="mb-4 flex items-center gap-2 border-b border-emerald-400/10 pb-3">
           <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
@@ -428,15 +422,6 @@ function BrandIntro() {
         <p className="mt-2 text-slate-400">status: analyzing_schema - detecting_missing_values</p>
         <p className="mt-2 text-sky-300">output: script_tratamento.py + README.md + requirements.txt</p>
       </div>
-    </div>
-  );
-}
-
-function FeaturePill({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-slate-800 bg-slate-950/55 px-4 py-3">
-      <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-emerald-200">{value}</p>
     </div>
   );
 }
