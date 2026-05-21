@@ -1,6 +1,8 @@
-# Data Script Generator
+# DataFlow
 
-Plataforma web para receber arquivos CSV, Parquet, JSON e XML, analisar inconsistencias nos dados e gerar automaticamente:
+DataFlow e uma plataforma web para transformar arquivos de dados brutos em scripts Python de tratamento prontos para uso, com analise tecnica, validacao de seguranca, empacotamento dos artefatos e historico por usuario.
+
+O sistema recebe arquivos CSV, Parquet, JSON e XML, identifica inconsistencias nos dados e gera automaticamente:
 
 - `script_tratamento.py`
 - `README.md`
@@ -10,7 +12,9 @@ Plataforma web para receber arquivos CSV, Parquet, JSON e XML, analisar inconsis
 
 ## Visao Geral
 
-O Data Script Generator automatiza a criacao de scripts Python para tratamento de dados. O usuario envia um arquivo pelo frontend, o backend armazena o arquivo no MinIO, cria um job no PostgreSQL e aciona um workflow n8n. O n8n chama o Worker Python para gerar um perfil tecnico do arquivo, usa IA para gerar artefatos e envia o resultado de volta ao backend.
+O DataFlow automatiza o caminho entre um arquivo bruto e um pacote de tratamento de dados reutilizavel. O usuario faz login, nomeia um processamento, envia um arquivo pelo frontend e acompanha o status ate receber script, README, requirements, relatorio de analise e pacote ZIP.
+
+O backend armazena o arquivo no MinIO, registra o job no PostgreSQL, impede repeticao do mesmo arquivo por usuario e aciona um workflow n8n. O n8n chama o Worker Python para gerar um perfil tecnico do arquivo, usa IA para gerar artefatos e envia o resultado de volta ao backend.
 
 Antes de salvar o script gerado, o backend executa uma validacao de seguranca para bloquear comandos perigosos como `eval`, `exec`, `subprocess`, `os.system`, `socket`, `requests`, `urllib`, `importlib` e acessos sensiveis.
 
@@ -375,12 +379,21 @@ Observacao: alguns status intermediarios dependem do workflow n8n ser configurad
 
 O frontend exige login por nome de usuario e senha. Para o MVP local, o cadastro e feito na propria tela inicial.
 
+No cadastro, o usuario tambem pode informar dados adicionais de perfil:
+
+- nome completo;
+- e-mail;
+- organizacao;
+- funcao.
+
 Depois do login:
 
 - uploads usam o usuario autenticado;
 - `GET /api/jobs` retorna apenas o historico do usuario logado;
 - `GET /api/jobs/{job_id}` e download retornam `404` se o job pertencer a outro usuario;
 - callbacks do n8n continuam localizando o job por `job_id`.
+- a tela `Dados do usuario` exibe informacoes de cadastro e um resumo dos processamentos do usuario.
+- os dados adicionais de perfil podem ser alterados pela propria tela `Dados do usuario`.
 
 Endpoints principais:
 
@@ -388,6 +401,7 @@ Endpoints principais:
 POST /api/auth/register
 POST /api/auth/login
 GET /api/auth/me
+PATCH /api/auth/me
 POST /api/auth/logout
 ```
 
@@ -475,7 +489,7 @@ Email: admin@local.dev
 Senha: admin123
 ```
 
-O servidor `Data Script Generator PostgreSQL` ja fica pre-cadastrado. Ao conectar, use a senha do banco:
+O servidor `DataFlow PostgreSQL` ja fica pre-cadastrado. Ao conectar, use a senha do banco:
 
 ```text
 app_password
@@ -547,11 +561,9 @@ O arquivo `tests/conftest.py` define variaveis fake para testes unitarios.
 ## Proximas Melhorias
 
 - Criar workflow n8n exportavel depois de validar manualmente a configuracao.
-- Implementar autenticacao real de usuarios.
-- Substituir `user_id = dev-user` por usuario autenticado.
 - Adicionar polling automatico no frontend.
 - Criar testes de integracao com banco e MinIO.
 - Adicionar presigned URLs para downloads privados.
 - Persistir artefatos separados no MinIO alem do ZIP.
-- Adicionar historico e filtros de jobs no frontend.
+- Adicionar filtros avancados no historico de jobs.
 - Validar JSON da IA contra `shared/schemas/generated_script_response.schema.json` dentro do backend ou worker.

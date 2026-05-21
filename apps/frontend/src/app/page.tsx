@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const AUTH_STORAGE_KEY = "dsg_access_token";
@@ -17,11 +17,15 @@ const PROCESSING_STATUSES = [
 ];
 
 type AuthMode = "login" | "register";
-type MainView = "processing" | "history";
+type MainView = "processing" | "history" | "account";
 
 type UserResponse = {
   id: string;
   username: string;
+  full_name?: string | null;
+  email?: string | null;
+  organization?: string | null;
+  role?: string | null;
   created_at: string;
 };
 
@@ -76,10 +80,21 @@ type AlertState = {
   message: string;
 };
 
+type UserProfilePayload = {
+  full_name: string;
+  email: string;
+  organization: string;
+  role: string;
+};
+
 export default function Home() {
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [organization, setOrganization] = useState("");
+  const [role, setRole] = useState("");
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<UserResponse | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -161,10 +176,22 @@ export default function Home() {
     setAlert(null);
 
     try {
+      const authPayload =
+        authMode === "register"
+          ? {
+              username,
+              password,
+              full_name: fullName,
+              email,
+              organization,
+              role,
+            }
+          : { username, password };
+
       const response = await fetch(`${API_BASE_URL}/api/auth/${authMode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify(authPayload),
       });
       const data = await parseApiResponse<AuthResponse>(response);
       if (!response.ok) {
@@ -175,6 +202,12 @@ export default function Home() {
       setAccessToken(data.access_token);
       setCurrentUser(data.user);
       setPassword("");
+      if (authMode === "register") {
+        setFullName("");
+        setEmail("");
+        setOrganization("");
+        setRole("");
+      }
       setAlert({ type: "success", message: authMode === "login" ? "Login realizado." : "Usuario criado." });
       await loadJobs(data.access_token);
     } catch (error) {
@@ -328,6 +361,28 @@ export default function Home() {
     }
   }
 
+  async function handleUpdateProfile(payload: UserProfilePayload): Promise<void> {
+    if (!accessToken) {
+      throw new Error("Sessao expirada. Faca login novamente.");
+    }
+
+    const response = await apiFetch(
+      "/api/auth/me",
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      accessToken,
+    );
+    const data = await parseApiResponse<UserResponse>(response);
+    if (!response.ok) {
+      throw new Error(getApiErrorMessage(data, "Nao foi possivel atualizar seus dados."));
+    }
+
+    setCurrentUser(data);
+  }
+
   if (isBootstrapping) {
     return (
       <main className="dataflow-bg grid min-h-screen place-items-center px-6">
@@ -348,11 +403,19 @@ export default function Home() {
             mode={authMode}
             username={username}
             password={password}
+            fullName={fullName}
+            email={email}
+            organization={organization}
+            role={role}
             alert={alert}
             isLoading={isAuthenticating}
             onModeChange={setAuthMode}
             onUsernameChange={setUsername}
             onPasswordChange={setPassword}
+            onFullNameChange={setFullName}
+            onEmailChange={setEmail}
+            onOrganizationChange={setOrganization}
+            onRoleChange={setRole}
             onSubmit={handleAuth}
           />
         </section>
@@ -392,11 +455,25 @@ export default function Home() {
               >
                 Historico
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveView("account")}
+                className={`h-10 rounded-md border px-4 text-sm font-semibold transition ${
+                  activeView === "account"
+                    ? "border-rose-500 bg-rose-500 text-zinc-950"
+                    : "border-zinc-700 bg-zinc-950/20 backdrop-blur-[2px] text-zinc-300 hover:border-rose-500/60 hover:text-rose-300"
+                }`}
+              >
+                Dados do usuario
+              </button>
             </nav>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="rounded-md border border-zinc-700/80 bg-zinc-950/20 backdrop-blur-[2px] px-3 py-2 font-mono text-sm text-zinc-300">
-              user:<span className="ml-1 font-semibold text-red-500">{currentUser.username}</span>
+              user:
+              <span className="ml-1 font-semibold text-red-500">
+                {currentUser.full_name || currentUser.username}
+              </span>
             </div>
             <button
               type="button"
@@ -431,7 +508,7 @@ export default function Home() {
               />
             </div>
           </div>
-        ) : (
+        ) : activeView === "history" ? (
           <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
             <HistoryPanel
               jobs={jobs}
@@ -448,6 +525,8 @@ export default function Home() {
 
             {jobStatus ? <JobResult job={jobStatus} /> : <EmptyHistorySelection />}
           </div>
+        ) : (
+          <UserDataSection user={currentUser} jobs={jobs} onUpdateProfile={handleUpdateProfile} />
         )}
       </section>
     </main>
@@ -459,9 +538,9 @@ function LogoMark({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
 
   return (
     <div
-      className={`${boxSize} grid place-items-center rounded-xl border border-red-500/30 bg-zinc-950/30 backdrop-blur-[2px] p-1 shadow-[0_0_32px_rgba(244,63,94,0.18)]`}
+      className={`${boxSize} grid place-items-center rounded-2xl border border-rose-500/30 bg-zinc-950/40 backdrop-blur-[2px] p-1 shadow-[0_0_34px_rgba(244,63,94,0.2),0_0_22px_rgba(249,115,22,0.08)]`}
     >
-      <img src="/dataflow-logo.svg" alt="DataFlow" className="h-full w-full rounded-lg" />
+      <img src="/dataflow-logo.svg" alt="DataFlow" className="h-full w-full" />
     </div>
   );
 }
@@ -515,21 +594,37 @@ function AuthPanel({
   mode,
   username,
   password,
+  fullName,
+  email,
+  organization,
+  role,
   alert,
   isLoading,
   onModeChange,
   onUsernameChange,
   onPasswordChange,
+  onFullNameChange,
+  onEmailChange,
+  onOrganizationChange,
+  onRoleChange,
   onSubmit,
 }: {
   mode: AuthMode;
   username: string;
   password: string;
+  fullName: string;
+  email: string;
+  organization: string;
+  role: string;
   alert: AlertState | null;
   isLoading: boolean;
   onModeChange: (mode: AuthMode) => void;
   onUsernameChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
+  onFullNameChange: (value: string) => void;
+  onEmailChange: (value: string) => void;
+  onOrganizationChange: (value: string) => void;
+  onRoleChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
@@ -573,6 +668,69 @@ function AuthPanel({
         autoComplete="username"
         placeholder="ex: analista_dados"
       />
+
+      {mode === "register" ? (
+        <div className="mt-4 grid gap-3">
+          <div>
+            <label className="block text-sm font-medium text-zinc-200" htmlFor="full-name">
+              Nome completo
+            </label>
+            <input
+              id="full-name"
+              value={fullName}
+              onChange={(event) => onFullNameChange(event.target.value)}
+              className="mt-2 h-11 w-full rounded-md border border-zinc-700 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-rose-500"
+              maxLength={160}
+              placeholder="Ex: Vinicius Machado"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-200" htmlFor="email">
+              E-mail
+            </label>
+            <input
+              id="email"
+              value={email}
+              onChange={(event) => onEmailChange(event.target.value)}
+              className="mt-2 h-11 w-full rounded-md border border-zinc-700 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-rose-500"
+              maxLength={255}
+              placeholder="voce@empresa.com"
+              type="email"
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-zinc-200" htmlFor="organization">
+                Organizacao
+              </label>
+              <input
+                id="organization"
+                value={organization}
+                onChange={(event) => onOrganizationChange(event.target.value)}
+                className="mt-2 h-11 w-full rounded-md border border-zinc-700 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-rose-500"
+                maxLength={160}
+                placeholder="Empresa ou time"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-zinc-200" htmlFor="role">
+                Funcao
+              </label>
+              <input
+                id="role"
+                value={role}
+                onChange={(event) => onRoleChange(event.target.value)}
+                className="mt-2 h-11 w-full rounded-md border border-zinc-700 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-rose-500"
+                maxLength={120}
+                placeholder="Analista, Engenheiro..."
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <label className="mt-3 block text-sm font-medium text-zinc-200" htmlFor="password">
         Senha
@@ -959,6 +1117,214 @@ function FailedState({ errorMessage }: { errorMessage?: string | null }) {
     <div className="mt-6 rounded-lg border border-red-400/30 bg-red-950/20 backdrop-blur-[2px] p-4 text-sm text-red-100">
       <p className="font-semibold">O processamento falhou.</p>
       <p className="mt-1">{errorMessage || "Nenhuma mensagem de erro foi retornada."}</p>
+    </div>
+  );
+}
+
+function UserDataSection({
+  user,
+  jobs,
+  onUpdateProfile,
+}: {
+  user: UserResponse;
+  jobs: JobResponse[];
+  onUpdateProfile: (payload: UserProfilePayload) => Promise<void>;
+}) {
+  const completedJobs = jobs.filter((job) => job.status === "COMPLETED").length;
+  const failedJobs = jobs.filter((job) => job.status === "FAILED" || job.status === "N8N_ERROR").length;
+  const lastJob = jobs[0];
+  const [fullName, setFullName] = useState(user.full_name ?? "");
+  const [email, setEmail] = useState(user.email ?? "");
+  const [organization, setOrganization] = useState(user.organization ?? "");
+  const [role, setRole] = useState(user.role ?? "");
+  const [profileAlert, setProfileAlert] = useState<AlertState | null>(null);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  useEffect(() => {
+    setFullName(user.full_name ?? "");
+    setEmail(user.email ?? "");
+    setOrganization(user.organization ?? "");
+    setRole(user.role ?? "");
+  }, [user]);
+
+  function resetProfileForm() {
+    setFullName(user.full_name ?? "");
+    setEmail(user.email ?? "");
+    setOrganization(user.organization ?? "");
+    setRole(user.role ?? "");
+    setProfileAlert(null);
+    setIsEditingProfile(false);
+  }
+
+  async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSavingProfile(true);
+    setProfileAlert(null);
+
+    try {
+      await onUpdateProfile({
+        full_name: fullName,
+        email,
+        organization,
+        role,
+      });
+      setProfileAlert({ type: "success", message: "Dados atualizados com sucesso." });
+      setIsEditingProfile(false);
+    } catch (error) {
+      setProfileAlert({ type: "error", message: getFriendlyError(error) });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  }
+
+  return (
+    <section className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+      <form onSubmit={handleProfileSubmit} className="dataflow-panel rounded-lg p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <LogoMark />
+            <div>
+              <p className="font-mono text-xs font-semibold uppercase tracking-[0.28em] text-rose-400">Conta DataFlow</p>
+              {isEditingProfile ? (
+                <input
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  className="mt-2 h-11 w-full rounded-md border border-zinc-700 bg-zinc-950/80 px-3 text-2xl font-semibold text-zinc-50 outline-none transition placeholder:text-zinc-600 focus:border-rose-500"
+                  maxLength={160}
+                  placeholder={user.username}
+                />
+              ) : (
+                <h2 className="mt-2 text-2xl font-semibold text-zinc-50">{user.full_name || user.username}</h2>
+              )}
+              <p className="mt-1 font-mono text-sm text-zinc-500">@{user.username}</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setProfileAlert(null);
+              setIsEditingProfile((current) => !current);
+            }}
+            className={`grid h-10 w-10 shrink-0 place-items-center rounded-md border text-lg transition ${
+              isEditingProfile
+                ? "border-rose-500 bg-rose-500/10 text-rose-200"
+                : "border-zinc-700 bg-zinc-950/30 text-zinc-300 hover:border-rose-500/60 hover:text-rose-300"
+            }`}
+            aria-label="Editar dados cadastrais"
+            title="Editar dados cadastrais"
+          >
+            &#9998;
+          </button>
+        </div>
+
+        {profileAlert ? <StatusAlert alert={profileAlert} /> : null}
+
+        <div className="mt-6 grid gap-5">
+          <ProfileField label="E-mail" isEditing={isEditingProfile} value={user.email || "Nao informado"}>
+            <input
+              id="profile-email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              className="mt-2 h-11 w-full rounded-md border border-zinc-700 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-rose-500"
+              maxLength={255}
+              placeholder="voce@empresa.com"
+              type="email"
+            />
+          </ProfileField>
+
+          <ProfileField label="Organizacao" isEditing={isEditingProfile} value={user.organization || "Nao informado"}>
+            <input
+              id="profile-organization"
+              value={organization}
+              onChange={(event) => setOrganization(event.target.value)}
+              className="mt-2 h-11 w-full rounded-md border border-zinc-700 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-rose-500"
+              maxLength={160}
+              placeholder="Empresa ou time"
+            />
+          </ProfileField>
+
+          <ProfileField label="Funcao" isEditing={isEditingProfile} value={user.role || "Nao informado"}>
+            <input
+              id="profile-role"
+              value={role}
+              onChange={(event) => setRole(event.target.value)}
+              className="mt-2 h-11 w-full rounded-md border border-zinc-700 bg-zinc-950/80 px-3 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-rose-500"
+              maxLength={120}
+              placeholder="Analista, Engenheiro..."
+            />
+          </ProfileField>
+
+          <ProfileField label="Cadastro criado em" isEditing={false} value={formatDate(user.created_at)} />
+        </div>
+
+        {isEditingProfile ? (
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <button
+              type="submit"
+              disabled={isSavingProfile}
+              className="inline-flex h-11 flex-1 items-center justify-center rounded-md bg-rose-500 px-5 text-sm font-bold text-zinc-950 shadow-[0_0_24px_rgba(244,63,94,0.18)] transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+            >
+              {isSavingProfile ? "Salvando..." : "Salvar alteracoes"}
+            </button>
+            <button
+              type="button"
+              onClick={resetProfileForm}
+              disabled={isSavingProfile}
+              className="inline-flex h-11 flex-1 items-center justify-center rounded-md border border-zinc-700 bg-zinc-950/30 px-5 text-sm font-semibold text-zinc-200 transition hover:border-rose-500/60 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:text-zinc-600"
+            >
+              Cancelar
+            </button>
+          </div>
+        ) : null}
+      </form>
+
+      <div className="grid gap-6">
+        <div className="dataflow-panel rounded-lg p-6">
+          <h2 className="text-lg font-semibold text-zinc-100">Resumo de uso</h2>
+          <p className="mt-1 text-sm text-zinc-500">Visao rapida dos processamentos vinculados a este usuario.</p>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <MetricCard label="Registros" value={formatNumber(jobs.length)} />
+            <MetricCard label="Concluidos" value={formatNumber(completedJobs)} />
+            <MetricCard label="Com erro" value={formatNumber(failedJobs)} />
+          </div>
+        </div>
+
+        <div className="dataflow-panel-soft rounded-lg p-6">
+          <h3 className="text-sm font-semibold text-zinc-100">Ultimo processamento</h3>
+          {lastJob ? (
+            <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+              <ResultRow label="Registro" value={lastJob.job_name} />
+              <ResultRow label="Status" value={lastJob.status} />
+              <ResultRow label="Arquivo" value={lastJob.file_name} />
+              <ResultRow label="Criado em" value={formatDate(lastJob.created_at)} />
+            </dl>
+          ) : (
+            <p className="mt-3 text-sm text-zinc-500">Este usuario ainda nao possui processamentos.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ProfileField({
+  label,
+  value,
+  isEditing,
+  children,
+}: {
+  label: string;
+  value: string;
+  isEditing: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <div>
+      <p className="font-mono text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+      {isEditing && children ? children : <p className="mt-1 break-words text-base font-semibold text-zinc-100">{value}</p>}
     </div>
   );
 }

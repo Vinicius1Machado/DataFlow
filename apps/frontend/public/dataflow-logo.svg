@@ -1,34 +1,38 @@
 <svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">DataFlow logo</title>
-  <desc id="desc">A neon data pipeline mark forming an abstract D and F monogram.</desc>
-  <rect width="256" height="256" rx="56" fill="#05070D"/>
-  <rect x="16" y="16" width="224" height="224" rx="44" fill="url(#panel)" stroke="url(#border)" stroke-width="2"/>
-  <path d="M75 68H128C160.585 68 187 94.4152 187 127C187 159.585 160.585 186 128 186H75V68Z" fill="#07131A" stroke="url(#flow)" stroke-width="12" stroke-linejoin="round"/>
-  <path d="M91 88V166" stroke="#D9FFF2" stroke-width="12" stroke-linecap="round"/>
-  <path d="M91 88H158" stroke="#34D399" stroke-width="12" stroke-linecap="round"/>
-  <path d="M91 127H146" stroke="#38BDF8" stroke-width="12" stroke-linecap="round"/>
-  <path d="M103 166H132" stroke="#34D399" stroke-width="12" stroke-linecap="round"/>
-  <path d="M157 88C173 98 178 112 178 127C178 143 171 158 157 167" stroke="#0EA5E9" stroke-width="8" stroke-linecap="round" opacity="0.75"/>
-  <circle cx="91" cy="88" r="13" fill="#05070D" stroke="#D9FFF2" stroke-width="6"/>
-  <circle cx="158" cy="88" r="11" fill="#05070D" stroke="#34D399" stroke-width="6"/>
-  <circle cx="146" cy="127" r="11" fill="#05070D" stroke="#38BDF8" stroke-width="6"/>
-  <circle cx="132" cy="166" r="11" fill="#05070D" stroke="#34D399" stroke-width="6"/>
-  <path d="M53 202H203" stroke="#34D399" stroke-width="4" stroke-linecap="round" stroke-dasharray="4 12" opacity="0.5"/>
+  <desc id="desc">A dark DataFlow mark with a flowing data path and Python script bracket using rose and orange accents.</desc>
+  <rect width="256" height="256" rx="56" fill="#09090B"/>
+  <rect x="18" y="18" width="220" height="220" rx="46" fill="url(#panel)" stroke="url(#frame)" stroke-width="2"/>
+  <path d="M74 58H136C165.824 58 190 82.1766 190 112C190 141.823 165.824 166 136 166H74V58Z" fill="#0C0A09" stroke="url(#dataflow)" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M90 80V178" stroke="#FAFAFA" stroke-width="10" stroke-linecap="round"/>
+  <path d="M90 80H140" stroke="#F43F5E" stroke-width="10" stroke-linecap="round"/>
+  <path d="M90 112H151" stroke="#FB923C" stroke-width="10" stroke-linecap="round"/>
+  <path d="M90 146H132" stroke="#F43F5E" stroke-width="10" stroke-linecap="round"/>
+  <path d="M133 72C155.091 72 173 89.9086 173 112C173 134.091 155.091 152 133 152" stroke="#FDBA74" stroke-width="6" stroke-linecap="round" stroke-dasharray="3 12" opacity="0.72"/>
+  <path d="M127 184L148 201L127 218" stroke="#FB923C" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M79 184L58 201L79 218" stroke="#F43F5E" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M99 219L111 181" stroke="#F4F4F5" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="90" cy="80" r="11" fill="#09090B" stroke="#FAFAFA" stroke-width="5"/>
+  <circle cx="140" cy="80" r="10" fill="#09090B" stroke="#F43F5E" stroke-width="5"/>
+  <circle cx="151" cy="112" r="10" fill="#09090B" stroke="#FB923C" stroke-width="5"/>
+  <circle cx="132" cy="146" r="10" fill="#09090B" stroke="#F43F5E" stroke-width="5"/>
+  <path d="M52 42H204" stroke="#F43F5E" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 12" opacity="0.42"/>
+  <path d="M52 232H204" stroke="#FB923C" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 12" opacity="0.34"/>
   <defs>
-    <linearGradient id="panel" x1="34" y1="22" x2="222" y2="232" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0F172A"/>
-      <stop offset="0.56" stop-color="#07111F"/>
-      <stop offset="1" stop-color="#020617"/>
+    <linearGradient id="panel" x1="42" y1="26" x2="218" y2="236" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#18181B"/>
+      <stop offset="0.52" stop-color="#0C0A09"/>
+      <stop offset="1" stop-color="#09090B"/>
     </linearGradient>
-    <linearGradient id="border" x1="33" y1="22" x2="223" y2="232" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#34D399"/>
-      <stop offset="0.5" stop-color="#38BDF8"/>
-      <stop offset="1" stop-color="#34D399" stop-opacity="0.35"/>
+    <linearGradient id="frame" x1="33" y1="20" x2="225" y2="232" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F43F5E"/>
+      <stop offset="0.54" stop-color="#FB923C"/>
+      <stop offset="1" stop-color="#F43F5E" stop-opacity="0.28"/>
     </linearGradient>
-    <linearGradient id="flow" x1="75" y1="68" x2="192" y2="180" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#34D399"/>
-      <stop offset="0.52" stop-color="#38BDF8"/>
-      <stop offset="1" stop-color="#34D399"/>
+    <linearGradient id="dataflow" x1="66" y1="58" x2="192" y2="164" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F43F5E"/>
+      <stop offset="0.58" stop-color="#FB923C"/>
+      <stop offset="1" stop-color="#F43F5E"/>
     </linearGradient>
   </defs>
 </svg>

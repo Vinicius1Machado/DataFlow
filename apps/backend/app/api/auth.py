@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_access_token, get_current_user, hash_access_token
 from app.db.session import get_db
 from app.models.user import AppUser, UserSession
-from app.schemas.auth import AuthCredentials, AuthResponse, UserResponse
+from app.schemas.auth import AuthCredentials, AuthResponse, RegisterCredentials, UserProfileUpdate, UserResponse
 from app.services.password_service import PasswordService
 
 
@@ -31,9 +31,16 @@ def _create_session(db: Session, user: AppUser) -> str:
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-def register(payload: AuthCredentials, db: Session = Depends(get_db)) -> AuthResponse:
+def register(payload: RegisterCredentials, db: Session = Depends(get_db)) -> AuthResponse:
     password_service = PasswordService()
-    user = AppUser(username=payload.username, password_hash=password_service.hash_password(payload.password))
+    user = AppUser(
+        username=payload.username,
+        full_name=payload.full_name,
+        email=payload.email,
+        organization=payload.organization,
+        role=payload.role,
+        password_hash=password_service.hash_password(payload.password),
+    )
     try:
         db.add(user)
         db.commit()
@@ -58,6 +65,24 @@ def login(payload: AuthCredentials, db: Session = Depends(get_db)) -> AuthRespon
 
 @router.get("/me", response_model=UserResponse)
 def me(current_user: AppUser = Depends(get_current_user)) -> AppUser:
+    return current_user
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_me(
+    payload: UserProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+) -> AppUser:
+    current_user.full_name = payload.full_name
+    current_user.email = payload.email
+    current_user.organization = payload.organization
+    current_user.role = payload.role
+
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+
     return current_user
 
 
