@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://data-script-generator.local/schemas/generated_script_response.schema.json",
+  "title": "GeneratedScriptResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "script_name",
+    "script_code",
+    "manual_name",
+    "manual_content",
+    "requirements_txt",
+    "detected_issues",
+    "execution_command",
+    "output_format",
+    "confidence_score"
+  ],
+  "properties": {
+    "script_name": {
+      "type": "string",
+      "minLength": 1,
+      "const": "script_tratamento.py"
+    },
+    "script_code": {
+      "type": "string",
+      "minLength": 1
+    },
+    "manual_name": {
+      "type": "string",
+      "minLength": 1,
+      "const": "README.md"
+    },
+    "manual_content": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requirements_txt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "detected_issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "description",
+          "treatment",
+          "severity"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "treatment": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warning",
+              "error"
+            ]
+          }
+        }
+      }
+    },
+    "execution_command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "output_format": {
+      "type": "string",
+      "enum": [
+        "csv",
+        "parquet",
+        "json",
+        "xml"
+      ]
+    },
+    "confidence_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  }
+}

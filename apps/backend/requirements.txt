@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+pydantic-settings
+sqlalchemy
+psycopg[binary]
+alembic
+boto3
+httpx
+python-dotenv
+pandas
+pyarrow
+lxml
+xmltodict
+charset-normalizer

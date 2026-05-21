@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic
+pandas
+pyarrow
+lxml
+xmltodict
+httpx
+python-dotenv

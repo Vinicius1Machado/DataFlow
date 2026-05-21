@@ -1,0 +1,204 @@
+services:
+  # Banco principal do MVP. O Postgres cria o banco informado em POSTGRES_DB
+  # no primeiro start do volume.
+  postgres:
+    image: postgres:16
+    container_name: dsg_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-data_script_generator}
+      POSTGRES_USER: ${POSTGRES_USER:-app_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app_user} -d ${POSTGRES_DB:-data_script_generator}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Interface web local para administrar o PostgreSQL pelo navegador.
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: dsg_pgadmin
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@local.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin123}
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+
+  # Storage S3-compatible para arquivos enviados e artefatos gerados.
+  minio:
+    image: minio/minio:latest
+    container_name: dsg_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      # API S3
+      - "9000:9000"
+      # Console web
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  # Container one-shot para garantir que o bucket local exista.
+  # A politica anonima de download permite que o worker baixe a file_url interna.
+  minio-create-bucket:
+    image: minio/mc:latest
+    container_name: dsg_minio_bucket
+    restart: "no"
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin123};
+      mc mb --ignore-existing local/${MINIO_BUCKET:-data-generator};
+      mc anonymous set download local/${MINIO_BUCKET:-data-generator};
+      exit 0;
+      "
+
+  # Cache/fila local para futuras tarefas assincronas do backend ou worker.
+  redis:
+    image: redis:7
+    container_name: dsg_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  # API FastAPI. Dentro do Docker usa postgres, minio e n8n pelos nomes dos servicos.
+  backend:
+    build:
+      context: ../apps/backend
+    container_name: dsg_backend
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - minio
+      - redis
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    environment:
+      APP_ENV: docker
+      BACKEND_PORT: 8000
+      BACKEND_URL: http://backend:8000
+      BACKEND_CORS_ORIGINS: '["http://localhost:3000","http://frontend:3000"]'
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      POSTGRES_DB: ${POSTGRES_DB:-data_script_generator}
+      POSTGRES_USER: ${POSTGRES_USER:-app_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app_password}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-app_password}@postgres:5432/${POSTGRES_DB:-data_script_generator}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_ENDPOINT: http://localhost:9000
+      MINIO_WORKER_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-data-generator}
+      MINIO_REGION: ${MINIO_REGION:-us-east-1}
+      N8N_PORT: 5678
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-admin123}
+      N8N_WEBHOOK_URL: http://n8n:5678/webhook/data-analysis
+      N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-troque_este_segredo}
+      N8N_CALLBACK_URL: http://backend:8000/api/n8n/callback
+      BACKEND_CALLBACK_URL: http://backend:8000/api/n8n/callback
+      WORKER_PROFILE_URL: http://worker:8001/profile
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-change-me}
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Worker FastAPI responsavel por baixar o arquivo e gerar o perfil tecnico.
+  worker:
+    build:
+      context: ../services/worker
+    container_name: dsg_worker
+    restart: unless-stopped
+    depends_on:
+      - minio
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-data-generator}
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Frontend Next.js. A URL da API e localhost porque a chamada parte do navegador.
+  frontend:
+    build:
+      context: ../apps/frontend
+    container_name: dsg_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "3000:3000"
+
+  # Orquestrador do fluxo. O workflow sera criado manualmente no n8n.
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: dsg_n8n
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - backend
+      - worker
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-data_script_generator}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-app_user}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-app_password}
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-admin123}
+      N8N_SECURE_COOKIE: "false"
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-dev-encryption-key-change-me}
+      WEBHOOK_URL: http://localhost:${N8N_PORT:-5678}
+      GENERIC_TIMEZONE: America/Sao_Paulo
+      TZ: America/Sao_Paulo
+      N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-troque_este_segredo}
+      WORKER_PROFILE_URL: http://worker:8001/profile
+      BACKEND_CALLBACK_URL: http://backend:8000/api/n8n/callback
+      EXECUTIONS_DATA_SAVE_ON_ERROR: all
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: "true"
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+# Volumes nomeados preservam dados entre reinicios locais.
+volumes:
+  postgres_data:
+  pgadmin_data:
+  minio_data:
+  n8n_data:

@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Data Script Generator PostgreSQL",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "data_script_generator",
+      "Username": "app_user",
+      "SSLMode": "prefer"
+    }
+  }
+}
